@@ -39,7 +39,9 @@ typedef struct {
 } Bullet;
 
 #define MAX_BULLETS 12800
+#define BULLETS_HELP 3
 Bullet bullets[MAX_BULLETS];
+Bullet bullets_help [BULLETS_HELP];
 Player player;
 
 int keyState[256]        = {0};
@@ -117,6 +119,37 @@ void spawnBullet() {
     }
 }
 
+void spawnBulletHelp() {
+    for (int i = 0; i < BULLETS_HELP; i++) {
+        if (!bullets_help[i].active) {
+            bullets_help[i].active = 1;
+            bullets_help[i].size = 10;
+            //velocidad base + aleatorio por el multiplicador
+            float speed = (100.0f + (rand() % 100)) * speedMultiplier;
+            int side = rand() % 4;
+            switch (side) {
+                case 0:
+                    bullets_help[i].x = boxX + (rand() % (int)boxW);
+                    bullets_help[i].y = boxY + boxH + 10;
+                    bullets_help[i].vx = 0;  bullets_help[i].vy = -speed; break;
+                case 1:
+                    bullets_help[i].x = boxX + (rand() % (int)boxW);
+                    bullets_help[i].y = boxY - 10;
+                    bullets_help[i].vx = 0;  bullets_help[i].vy = speed;  break;
+                case 2:
+                    bullets_help[i].x = boxX - 10;
+                    bullets_help[i].y = boxY + (rand() % (int)boxH);
+                    bullets_help[i].vx = speed;  bullets_help[i].vy = 0;   break;
+                default:
+                    bullets_help[i].x = boxX + boxW + 10;
+                    bullets_help[i].y = boxY + (rand() % (int)boxH);
+                    bullets_help[i].vx = -speed; bullets_help[i].vy = 0;   break;
+            }
+            return;
+        }
+    }
+}
+
 int checkCollision(float ax, float ay, float as, float bx, float by, float bs) {
     float halfA = as * 0.4f;
     float halfB = bs * 0.4f;
@@ -139,7 +172,7 @@ void display_callback() {
     glVertex2f(boxX, boxY + boxH);
     glEnd();
 
-    //proyectiles
+    //proyectiles hostiles
     glColor3f(1, 1, 1);
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bullets[i].active) continue;
@@ -151,6 +184,20 @@ void display_callback() {
         glVertex2f(bullets[i].x - s, bullets[i].y + s);
         glEnd();
     }
+
+    //proyectiles de mejora
+    glColor3f(0, 1, 0);
+    for (int i = 0; i < BULLETS_HELP; i++) {
+        if (!bullets_help[i].active) continue;
+        float s = bullets_help[i].size * 0.5f;
+        glBegin(GL_QUADS);
+        glVertex2f(bullets_help[i].x - s, bullets_help[i].y - s);
+        glVertex2f(bullets_help[i].x + s, bullets_help[i].y - s);
+        glVertex2f(bullets_help[i].x + s, bullets_help[i].y + s);
+        glVertex2f(bullets_help[i].x - s, bullets_help[i].y + s);
+        glEnd();
+    }
+
 
     // jugador
     if (!gameOver)
@@ -215,9 +262,12 @@ void update(int value) {
         if (player.y + half > boxY + boxH) player.y = boxY + boxH - half;
 
         spawnTimer -= dt;
+
         if (spawnTimer <= 0) {
             spawnBullet();
-            if (difficultyLevel >= 5) spawnBullet();
+            if (difficultyLevel >= 3) spawnBullet();
+
+            if (difficultyLevel >= 2) spawnBulletHelp();
 
             // intervalo base aleatorio
             float baseInterval = 0.25f + (rand() % 100) / 300.0f;
@@ -228,7 +278,7 @@ void update(int value) {
 
             spawnTimer = spawnInterval;
         }
-        // Balas
+        // Balas malas
         for (int i = 0; i < MAX_BULLETS; i++) {
             if (!bullets[i].active) continue;
             bullets[i].x += bullets[i].vx * dt;
@@ -245,6 +295,25 @@ void update(int value) {
                 bullets[i].active = 0;
                 player.hp--;
                 if (player.hp <= 0) { player.hp = 0; gameOver = 1; }
+            }
+        }
+        // Balas buenas
+        for (int i = 0; i < BULLETS_HELP; i++) {
+            if (!bullets_help[i].active) continue;
+            bullets_help[i].x += bullets_help[i].vx * dt;
+            bullets_help[i].y += bullets_help[i].vy * dt;
+
+            if (bullets_help[i].x < boxX - 30 || bullets_help[i].x > boxX + boxW + 30 ||
+                bullets_help[i].y < boxY - 30 || bullets_help[i].y > boxY + boxH + 30) {
+                bullets_help[i].active = 0;
+                continue;
+            }
+
+            if (checkCollision(player.x, player.y, player.size,
+                               bullets_help[i].x, bullets_help[i].y, bullets_help[i].size)) {
+                bullets_help[i].active = 0;
+                player.hp++;
+                if (player.hp > 20) { player.hp = 20; gameOver = 0; }
             }
         }
     }
