@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <SDL2/SDL_mixer.h>
 
 #define WINDOW_W 500
 #define WINDOW_H 500
@@ -20,6 +21,73 @@ int   difficultyLevel = 0;
 #define SPEED_INTERVAL   10.0f  //cada cuántos segundos sube
 #define SPEED_STEP       0.15f  //cuánto sube cada vez
 #define MAX_MULTIPLIER   3.0f //tope para no volverse imposible
+
+// Carga de audios
+const char* BGM_FILES[8] = {
+    "assets/audio_065.ogg",   // 0.65×
+    "assets/audio_075.ogg",   // 0.75×
+    "assets/audio_085.ogg",   // 0.85×
+    "assets/audio_095.ogg",   // 0.95×
+    "assets/audio_100.ogg",   // original
+    "assets/audio_110.ogg",   // 1.10×
+    "assets/audio_115.ogg",   // 1.15×
+    "assets/audio_120.ogg"    // 1.20×
+};
+
+Mix_Music* bgm[8] = { nullptr };
+int currentBgmIndex = -1;
+
+void initAudio() {
+    // 1. Cargar decoders (OGG, etc.)
+    int initted = Mix_Init(MIX_INIT_OGG);
+    if ((initted & MIX_INIT_OGG) != MIX_INIT_OGG) {
+        fprintf(stderr, "OGG no soportado: %s\n", Mix_GetError());
+    }
+
+    // 2. Abrir el dispositivo de audio
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
+        fprintf(stderr, "Error audio: %s\n", Mix_GetError());
+        return;
+    }
+
+    Mix_VolumeMusic(64);
+
+    for (int i = 0; i < 8; i++) {
+        bgm[i] = Mix_LoadMUS(BGM_FILES[i]);
+        if (!bgm[i]) {
+            fprintf(stderr, "No se pudo cargar %s: %s\n",
+                    BGM_FILES[i], Mix_GetError());
+        }
+    }
+    int cargados = 0;
+    for (int i = 0; i < 8; i++) if (bgm[i]) cargados++;
+    printf("BGM cargados: %d/8\n", cargados);
+    if (cargados < 8) {
+        printf("Faltan archivos");
+    }
+}
+
+void playBgmIndex(int idx) {
+    if (idx < 0 || idx >= 8) return;
+    if (idx == currentBgmIndex) return;
+    if (!bgm[idx]) return;   // por si falló la carga
+
+    currentBgmIndex = idx;
+    Mix_HaltMusic();
+    Mix_FadeInMusic(bgm[idx], -1, 300);  // -1 = loop, fade in 300 ms
+}
+
+int levelToBgmIndex(int nivel) {
+    if (nivel < 2)  return 0;   // 0.65×  niveles 1-2
+    if (nivel < 4)  return 1;   // 0.75×  niveles 3-4
+    if (nivel < 6)  return 2;   // 0.85×  niveles 5-6
+    if (nivel < 8)  return 3;   // 0.95×  niveles 7-8
+    if (nivel < 10) return 4;   // 1.00×  niveles 9-10
+    if (nivel < 13) return 5;   // 1.10×  niveles 11-13
+    if (nivel < 16) return 6;   // 1.15×  niveles 14-16
+    return 7;  // 1.20×  nivel 17+
+}
+
 //------------------------------------------------------------------------------
 //Caja de batalla
 float boxX, boxY, boxW, boxH;
@@ -49,6 +117,21 @@ int specialKeyState[256] = {0};
 int lastTime;
 float spawnTimer = 0;
 int gameOver = 0;
+
+//detener la musica
+void triggerGameOver() {
+    if (gameOver) return; // evitar doble llamada
+    gameOver = 1;
+
+    //fade out de 800 ms
+    Mix_FadeOutMusic(800);
+
+    // Silenciar SFX que estén sonando (impactos, etc.)
+    Mix_HaltChannel(-1);
+
+    // Opcional: efecto de sonido de "muerte"
+    // Mix_PlayChannel(-1, sndGameOver, 0);
+}
 
 // inicializacion
 void initGame() {
@@ -157,6 +240,49 @@ int checkCollision(float ax, float ay, float as, float bx, float by, float bs) {
            fabsf(ay - by) < (halfA + halfB);
 }
 
+//reiniciar
+void resetGame() {
+    // Resetear estado
+    player.x = WINDOW_W / 2.0f;
+    player.y = WINDOW_H / 2.0f;
+    player.hp = 20;
+    gameOver = 0;
+    gameTime = 0.0f;
+    speedMultiplier = 1.0f;
+    difficultyLevel = 0;
+    spawnTimer = 0.0f;
+
+    // Limpiar balas
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        bullets[i].active = 0;
+    }
+
+    // Reiniciar música desde el tier más lento
+    Mix_HaltMusic();
+    playBgmIndex(0);
+    Mix_FadeInMusic(bgm[0], -1, 400);   // por si acaso el fadeout lo dejo a medias
+}
+
+int textWidth(const char *text, void *font) {
+    int w = 0;
+    for (const char *c = text; *c; c++) {
+        w += glutBitmapWidth(font, *c);
+    }
+    return w;
+}
+
+void drawTextCentered(float cx, float cy, const char *text, void *font) {
+    int w = textWidth(text, font);
+    // cy es el centro vertical; ajustamos para que el texto quede centrado
+    // (la altura de GLUT_BITMAP_9_BY_15 es 15 px, mitad = 7)
+    int h = 15;
+    glRasterPos2f(cx - w / 2.0f, cy - h / 2.0f);
+    for (const char *c = text; *c; c++) {
+        glutBitmapCharacter(font, *c);
+    }
+}
+
+
 //render
 void display_callback() {
     glClearColor(0, 0, 0, 1);
@@ -204,7 +330,6 @@ void display_callback() {
     {drawHeart(player.x, player.y, player.size);}
 
 
-
     //HP
     char buf[32];
     sprintf(buf, "HP: %d   NIVEL: %d", player.hp, difficultyLevel + 1);
@@ -214,9 +339,12 @@ void display_callback() {
 
     if (gameOver) {
         glColor3f(1, 0, 0);
-        glRasterPos2f(WINDOW_W/2 - 40, WINDOW_H/2);
-        const char *msg = "GAME OVER";
-        for (const char *c = msg; *c; c++) glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *c);
+        drawTextCentered(WINDOW_W / 2.0f, WINDOW_H / 2.0f,
+            "GAME OVER", GLUT_BITMAP_9_BY_15);
+
+        glColor3f(1, 1, 1);
+        drawTextCentered(WINDOW_W / 2.0f, WINDOW_H / 2.0f - 30,
+            "Pulsa R para reiniciar", GLUT_BITMAP_9_BY_15);
     }
 
     glutSwapBuffers();
@@ -238,6 +366,8 @@ void update(int value) {
             difficultyLevel = newLevel;
             speedMultiplier += SPEED_STEP;
             if (speedMultiplier > MAX_MULTIPLIER) speedMultiplier = MAX_MULTIPLIER;
+
+            playBgmIndex(levelToBgmIndex(difficultyLevel));
         }
 
         //movimiento del jugador
@@ -294,7 +424,10 @@ void update(int value) {
                                bullets[i].x, bullets[i].y, bullets[i].size)) {
                 bullets[i].active = 0;
                 player.hp--;
-                if (player.hp <= 0) { player.hp = 0; gameOver = 1; }
+                if (player.hp <= 0) {
+                    player.hp = 0;
+                    triggerGameOver();   // 👈
+                }
             }
         }
         // Balas buenas
@@ -321,10 +454,39 @@ void update(int value) {
     glutPostRedisplay();
     glutTimerFunc(16, update, 0);
 }
+
+void shutdownAudio() {
+    // Detener cualquier música en curso
+    Mix_HaltMusic();
+
+    // Liberar cada pista cargada
+    for (int i = 0; i < 8; i++) {
+        if (bgm[i]) {
+            Mix_FreeMusic(bgm[i]);
+            bgm[i] = nullptr;
+        }
+    }
+
+    // Cerrar el dispositivo de audio
+    Mix_CloseAudio();
+
+    // Liberar los códecs inicializados con Mix_Init
+    Mix_Quit();
+}
+
 // entrada
 void keyboard(unsigned char key, int x, int y) {
     keyState[key] = 1;
-    if (key == 27) exit(0); //ESC
+    if (key == 27) {   // ESC
+        shutdownAudio();
+        exit(0);
+    }
+    if (key == 'r' || key == 'R') {
+        if (gameOver) resetGame(); //solo reinicia si se muere
+    }
+    keyState[key] = 1;
+
+
 }
 void keyboardUp(unsigned char key, int x, int y) { keyState[key] = 0; }
 void special(int key, int x, int y)              { specialKeyState[key] = 1; }
@@ -346,6 +508,8 @@ int main(int argc, char **argv) {
     glutInitWindowSize(WINDOW_W, WINDOW_H);
     glutCreateWindow("Bullet Hell");
     initGame();
+    initAudio();
+    playBgmIndex(0);
 
     glutDisplayFunc(display_callback);
     glutReshapeFunc(reshape);
