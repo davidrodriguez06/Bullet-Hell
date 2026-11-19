@@ -18,20 +18,20 @@ float gameTime        = 0.0f; //tiempo total de la partida
 float speedMultiplier = 1.0f; //velocidad base
 int   difficultyLevel = 0;
 
-#define SPEED_INTERVAL   10.0f  //cada cuántos segundos sube
-#define SPEED_STEP       0.15f  //cuánto sube cada vez
+#define SPEED_INTERVAL   10.0f //cada cuántos segundos sube
+#define SPEED_STEP       0.15f //cuánto sube cada vez
 #define MAX_MULTIPLIER   3.0f //tope para no volverse imposible
 
 // Carga de audios
 const char* BGM_FILES[8] = {
-    "assets/audio_065.ogg",   // 0.65×
-    "assets/audio_075.ogg",   // 0.75×
-    "assets/audio_085.ogg",   // 0.85×
-    "assets/audio_095.ogg",   // 0.95×
-    "assets/audio_100.ogg",   // original
-    "assets/audio_110.ogg",   // 1.10×
-    "assets/audio_115.ogg",   // 1.15×
-    "assets/audio_120.ogg"    // 1.20×
+    "assets/audio_065.ogg", // 0.65×
+    "assets/audio_075.ogg", // 0.75×
+    "assets/audio_085.ogg", // 0.85×
+    "assets/audio_095.ogg",// 0.95×
+    "assets/audio_100.ogg", // original
+    "assets/audio_110.ogg",// 1.10×
+    "assets/audio_115.ogg", // 1.15×
+    "assets/audio_120.ogg" // 1.20×
 };
 
 Mix_Music* bgm[8] = { nullptr };
@@ -74,7 +74,7 @@ void playBgmIndex(int idx) {
 
     currentBgmIndex = idx;
     Mix_HaltMusic();
-    Mix_FadeInMusic(bgm[idx], -1, 300);  // -1 = loop, fade in 300 ms
+    Mix_FadeInMusic(bgm[idx], -1, 300);// -1 = loop, fade in 300 ms para suavizar transicion
 }
 
 int levelToBgmIndex(int nivel) {
@@ -122,15 +122,10 @@ int gameOver = 0;
 void triggerGameOver() {
     if (gameOver) return; // evitar doble llamada
     gameOver = 1;
-
     //fade out de 800 ms
     Mix_FadeOutMusic(800);
-
     // Silenciar SFX que estén sonando (impactos, etc.)
     Mix_HaltChannel(-1);
-
-    // Opcional: efecto de sonido de "muerte"
-    // Mix_PlayChannel(-1, sndGameOver, 0);
 }
 
 // inicializacion
@@ -260,7 +255,7 @@ void resetGame() {
     // Reiniciar música desde el tier más lento
     Mix_HaltMusic();
     playBgmIndex(0);
-    Mix_FadeInMusic(bgm[0], -1, 400);   // por si acaso el fadeout lo dejo a medias
+    Mix_FadeInMusic(bgm[0], -1, 400);//por si acaso el fadeout lo dejo a medias
 }
 
 int textWidth(const char *text, void *font) {
@@ -270,7 +265,7 @@ int textWidth(const char *text, void *font) {
     }
     return w;
 }
-
+//funcion para centrar
 void drawTextCentered(float cx, float cy, const char *text, void *font) {
     int w = textWidth(text, font);
     // cy es el centro vertical; ajustamos para que el texto quede centrado
@@ -281,7 +276,6 @@ void drawTextCentered(float cx, float cy, const char *text, void *font) {
         glutBitmapCharacter(font, *c);
     }
 }
-
 
 //render
 void display_callback() {
@@ -324,11 +318,9 @@ void display_callback() {
         glEnd();
     }
 
-
     // jugador
     if (!gameOver)
     {drawHeart(player.x, player.y, player.size);}
-
 
     //HP
     char buf[32];
@@ -466,11 +458,9 @@ void shutdownAudio() {
             bgm[i] = nullptr;
         }
     }
-
-    // Cerrar el dispositivo de audio
+    //Cerrar el dispositivo de audio
     Mix_CloseAudio();
-
-    // Liberar los códecs inicializados con Mix_Init
+    //Liberar los códecs inicializados con Mix_Init
     Mix_Quit();
 }
 
